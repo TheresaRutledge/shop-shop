@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from '@apollo/react-hooks';
-
+import { idbPromise } from '../utils/helpers';
 import { useStoreContext } from "../utils/GlobalState";
 import {
   REMOVE_FROM_CART,
@@ -33,12 +33,18 @@ function Detail() {
         type: UPDATE_CART_QUANTITY,
         _id: id,
         purchaseQuantity: parseInt(itemInCart.purchaseQuantity) + 1
-      })
+      });
+      idbPromise('cart', 'put', {
+        ...itemInCart,
+        purchaseQuantity: parseInt(itemInCart.purchaseQuantity) + 1
+      });
     } else {
       dispatch({
         type: ADD_TO_CART,
         product: { ...currentProduct, purchaseQuantity: 1 }
       });
+      idbPromise('cart', 'put', { ...currentProduct, purchaseQuantity: 1 });
+
     }
   };
 
@@ -46,19 +52,36 @@ function Detail() {
     dispatch({
       type: REMOVE_FROM_CART,
       _id: id
-    })
+    });
+    idbPromise('cart','delete',{...currentProduct})
   }
 
   useEffect(() => {
+    // exists in global state
     if (products.length) {
       setCurrentProduct(products.find(product => product._id === id));
-    } else if (data) {
+    } 
+    // retrieve from server
+    else if (data) {
       dispatch({
         type: UPDATE_PRODUCTS,
         products: data.products
-      })
+      });
+      // store to indexDb
+      data.products.forEach((product) => {
+        idbPromise('products', 'put', product);
+      });
     }
-  }, [products, data, dispatch, id]);
+    // no connection, get from cache in indexDB 
+    else if(!loading){
+      idbPromise('products','get').then((indexedProducts)=> {
+        dispatch({
+          type:UPDATE_PRODUCTS,
+          products:indexedProducts
+        });
+      });
+    }
+  }, [products, data, loading, dispatch, id]);
 
   return (
     <>
